@@ -5,6 +5,7 @@ import cPickle
 import pylab as plt
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+import datetime
 
 def prices(tickers,start,end,backend='google'):
     if backend == 'quantopian':
@@ -111,15 +112,61 @@ def run_single(tickers, p):
     ddwn = calc_ddwn(pnl)
     return pnl,sharpe,ddwn
 
+def parameter_sweep(tickers,p,params,N):
+    pnls = []
+    sharpes = []
+    ddwns = []
+    for i in range(N):
+        b = min(params[i])
+        a = max(params[i])
+        try:
+            sig = calc_signals(tickers,p,a,b)
+            pnl = calc_pnl(sig,p)
+            pnls.append(pnl[-1])
+            sharpes.append(calc_sharpe(pnl))
+            ddwns.append(calc_ddwn(pnl))
+
+        except:
+            pnls.append(np.nan)
+            sharpes.append(np.nan)
+            ddwns.append(np.nan)
+
+    return pnls,sharpes,ddwns
+
+def run_parameter_sweep(tickers,start,end,BACKEND):
+    N = 500
+    sm = 5
+    lm = 250
+    frac = 0.7
+    mid_point = str(datetime.timedelta((parse(end)-parse(start)).days*frac)+parse(start))
+    print 'MID POINT:', mid_point
+    print 'BACKEND:',BACKEND
+    params = np.array([np.random.randint(sm,lm,(N,)) for i in range(2)]).T
+
+    p0 = prices(tickers,start,mid_point,backend=BACKEND)
+    pnls1,sharpes1,ddwns1 = parameter_sweep(tickers,p0,params,N)
+
+    p1 = prices(tickers,mid_point,end,backend=BACKEND)
+    pnls2,sharpes2,ddwns2 = parameter_sweep(tickers,p1,params,N)
+    return pnls1,sharpes1,ddwns1,pnls2,sharpes2,ddwns2
+
+def plot_pnl_hist(pnl):
+    plt.hist(pnl,40)
+    plt.xlabel('pnl')
+    plt.ylabel('N')
+    plt.show()
+
 if __name__=="__main__":
-    BACKEND = 'google'
-    # BACKEND = 'file'
+    # BACKEND = 'google'
+    BACKEND = 'file'
     tickers = ['AAPL','MSFT','CSCO','XOM']
     start = '2003-01-01'
     end = '2017-06-01'
-    p = prices(tickers,start,end,backend=BACKEND)
-    pnl,sharpe,ddwn = run_single(tickers,p)
-    plt.plot(pnl)
-    test_pnl()
-    test_ddwn()
-    plot_sharpe()
+    # p = prices(tickers,start,end,backend=BACKEND)
+    # pnl,sharpe,ddwn = run_single(tickers,p)
+    # plt.plot(pnl)
+    # test_pnl()
+    # test_ddwn()
+    # plot_sharpe()
+    pnls1,sharpes1,ddwns1,pnls2,sharpes2,ddwns2 = run_parameter_sweep(tickers,start,end,BACKEND)
+    plot_pnl_hist(pnls1)
