@@ -119,6 +119,7 @@ def parameter_sweep(tickers,p,params,N):
     for i in range(N):
         b = min(params[i])
         a = max(params[i])
+        if a==b: continue
         try:
             sig = calc_signals(tickers,p,a,b)
             pnl = calc_pnl(sig,p)
@@ -142,6 +143,10 @@ def run_parameter_sweep(tickers,start,end,BACKEND):
     print 'MID POINT:', mid_point
     print 'BACKEND:',BACKEND
     params = np.array([np.random.randint(sm,lm,(N,)) for i in range(2)]).T
+    plt.plot(params[:,0],params[:,1],'o')
+    plt.xlabel('parameter 1')
+    plt.ylabel('parameter 2')
+    plt.show()
 
     p0 = prices(tickers,start,mid_point,backend=BACKEND)
     pnls1,sharpes1,ddwns1 = parameter_sweep(tickers,p0,params,N)
