@@ -49,10 +49,19 @@ def calc_pnl(sig,p):
     return pnlx
 
 def calc_sharpe(pnl):
-    retsx = diff(pnl)
+    retsx = np.diff(pnl)
     retsx = retsx[~np.isinf(retsx)]
     sharpe = np.nanmean(retsx)/np.nanstd(retsx)*np.sqrt(252)
     return sharpe
+
+def calc_ddwn(pnl):
+    hwm = 0
+    ddwn = []
+    for i in pnl:
+        if i>hwm:
+            hwm = i
+        ddwn.append(i - hwm)
+    return np.nanmin(ddwn)
 
 def plot_sharpe():
     k = np.random.randn(1000)+0.08
@@ -86,6 +95,21 @@ def test_pnl():
     plt.xlabel('time')
     plt.show()
 
+def test_ddwn():
+    k = np.random.randn(1000)
+    ddwn = calc_ddwn(np.cumsum(k))
+    plt.plot(np.cumsum(k))
+    plt.xlabel('time')
+    plt.ylabel('price')
+    plt.title('drawdown: %s'%ddwn)
+    plt.show()
+
+def run_single(tickers, p):
+    sig = calc_signals(tickers,p,10,20)
+    pnl = calc_pnl(sig,p)
+    sharpe = calc_sharpe(pnl)
+    ddwn = calc_ddwn(pnl)
+    return pnl,sharpe,ddwn
 
 if __name__=="__main__":
     BACKEND = 'google'
@@ -94,5 +118,8 @@ if __name__=="__main__":
     start = '2003-01-01'
     end = '2017-06-01'
     p = prices(tickers,start,end,backend=BACKEND)
+    pnl,sharpe,ddwn = run_single(tickers,p)
+    plt.plot(pnl)
     test_pnl()
+    test_ddwn()
     plot_sharpe()
