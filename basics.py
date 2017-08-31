@@ -5,7 +5,10 @@ import cPickle
 import pylab as plt
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.cluster import KMeans, AgglomerativeClustering
+from sklearn.metrics import calinski_harabaz_score
 import datetime
+from ipdb import set_trace
 
 def prices(tickers,start,end,backend='google'):
     if backend == 'quantopian':
@@ -25,6 +28,7 @@ def prices(tickers,start,end,backend='google'):
 
     elif backend == 'file':
         p = cPickle.load(open('prices.pick'))
+        p = p.loc[:,parse(start):parse(end)]
         field = 'Close'
 
 
@@ -112,13 +116,15 @@ def run_single(tickers, p):
     ddwn = calc_ddwn(pnl)
     return pnl,sharpe,ddwn
 
-def parameter_sweep(tickers,p,params,N):
+def parameter_sweep(tickers,p,params,N,progress = False):
     pnls = []
     sharpes = []
     ddwns = []
+    new_params = []
     for i in range(N):
-        b = min(params[i])
-        a = max(params[i])
+        if progress: print i
+        a = min(params[i])
+        b = max(params[i])
         if a==b: continue
         try:
             sig = calc_signals(tickers,p,a,b)
@@ -126,16 +132,17 @@ def parameter_sweep(tickers,p,params,N):
             pnls.append(pnl[-1])
             sharpes.append(calc_sharpe(pnl))
             ddwns.append(calc_ddwn(pnl))
+            new_params.append([a,b])
 
         except:
             pnls.append(np.nan)
             sharpes.append(np.nan)
             ddwns.append(np.nan)
+            new_params.append([a,b])
 
-    return pnls,sharpes,ddwns
+    return pnls,sharpes,ddwns,new_params
 
-def run_parameter_sweep(tickers,start,end,BACKEND):
-    N = 500
+def run_parameter_sweep(tickers,start,end,BACKEND,N):
     sm = 5
     lm = 250
     frac = 0.7
@@ -143,23 +150,89 @@ def run_parameter_sweep(tickers,start,end,BACKEND):
     print 'MID POINT:', mid_point
     print 'BACKEND:',BACKEND
     params = np.array([np.random.randint(sm,lm,(N,)) for i in range(2)]).T
-    plt.plot(params[:,0],params[:,1],'o')
-    plt.xlabel('parameter 1')
-    plt.ylabel('parameter 2')
-    plt.show()
+    # plt.plot(params[:,0],params[:,1],'o')
+    # plt.xlabel('parameter 1')
+    # plt.ylabel('parameter 2')
+    # plt.show()
 
     p0 = prices(tickers,start,mid_point,backend=BACKEND)
-    pnls1,sharpes1,ddwns1 = parameter_sweep(tickers,p0,params,N)
+    pnls1,sharpes1,ddwns1,new_params = parameter_sweep(tickers,p0,params,N)
 
     p1 = prices(tickers,mid_point,end,backend=BACKEND)
-    pnls2,sharpes2,ddwns2 = parameter_sweep(tickers,p1,params,N)
-    return pnls1,sharpes1,ddwns1,pnls2,sharpes2,ddwns2
+    pnls2,sharpes2,ddwns2,new_params = parameter_sweep(tickers,p1,params,N,progress=True)
+    return pnls1,sharpes1,ddwns1,pnls2,sharpes2,ddwns2,new_params
 
-def plot_pnl_hist(pnl):
-    plt.hist(pnl,40)
+def plot_pnl_hist(pnls1,pnls2):
+    plt.hist(pnls1,40)
+    plt.hist(pnls2,40)
+    mean1 = np.mean(pnls1)
+    mean2 = np.mean(pnls2)
     plt.xlabel('pnl')
     plt.ylabel('N')
+    plt.title('mean train: %s; mean test: %s'%(mean1,mean2))
     plt.show()
+
+def show_train_test_correlation(pnls1,pnls2):
+    plt.plot(pnls1,pnls2,'o')
+    plt.xlabel('train pnl')
+    plt.ylabel('test pnl')
+    plt.title('train-test correlation')
+    plt.show()
+
+def get_cluster_number(X):
+    score = 0
+    best_cluster_number = 0
+    for i in range(2,10):
+        # kmeans = AgglomerativeClustering(n_clusters = i).fit(X)
+        kmeans = KMeans(n_clusters=i).fit(X)
+        chs = calinski_harabaz_score(X,kmeans.labels_)
+        print 'cluster number -->', i, chs
+        if chs>score:
+            best_cluster_number = i
+            score = chs
+    return best_cluster_number-1
+
+def plot_clusters(pnls1,pnls2):
+    Nc = get_cluster_number(np.array([pnls1,pnls2]).T)
+    kmeans = KMeans(n_clusters=Nc+1).fit(np.array([pnls1,pnls2]).T)
+    cPickle.dump(kmeans,open('kmeans.pick','w'))
+    # plt.scatter(pnls1,pnls2,c=kmeans.labels_);
+    # cPickle.dump([pnls1,pnls2],open('pnls.pick','w'))
+    # plt.xlabel('train pnl')
+    # plt.ylabel('test pnl')
+    # plt.title('train-test correlation')
+    # plt.show()
+    return kmeans,Nc
+
+def plot_linreg(x,y):
+    m = np.polyfit(x,y,1)
+    xx = np.linspace(min(x),max(x),1000)
+    yy = np.polyval(m,xx)
+    plt.plot(xx,yy)
+    return m
+
+def find_best_cluster(kmeans):
+    median_oos_pnl = []
+    for label in np.unique(kmeans.labels_):
+        median_pnl = np.median(np.array(pnls2)[kmeans.labels_==label])
+        median_oos_pnl.append(median_pnl)
+    center_mean = np.argmax(np.mean(kmeans.cluster_centers_,axis=1))
+    opt_label = np.argmax(median_oos_pnl)
+    if center_mean!=opt_label:
+        print 'Warning: best center mean is different from median oos pnl'
+    return opt_label
+
+def plot_best_cluster(kmeans):
+    opt_label = find_best_cluster(kmeans)
+    x = np.array(pnls1)[kmeans.labels_==opt_label]
+    y = np.array(pnls2)[kmeans.labels_==opt_label]
+    plt.scatter(x,y)
+    m = plot_linreg(x,y)
+    plt.title('slope of regression: %s'%m[0])
+    plt.xlabel('train pnl')
+    plt.ylabel('test pnl')
+    return opt_label
+
 
 if __name__=="__main__":
     # BACKEND = 'google'
@@ -173,5 +246,23 @@ if __name__=="__main__":
     # test_pnl()
     # test_ddwn()
     # plot_sharpe()
-    pnls1,sharpes1,ddwns1,pnls2,sharpes2,ddwns2 = run_parameter_sweep(tickers,start,end,BACKEND)
-    plot_pnl_hist(pnls1)
+    # pnls1,sharpes1,ddwns1,pnls2,sharpes2,ddwns2,params = run_parameter_sweep(tickers,start,end,BACKEND,30000)
+    # cPickle.dump([pnls1,pnls2],open('pnls.pick','w'))
+    # cPickle.dump(params,open('params.pick','w'))
+    # plot_pnl_hist(pnls1,pnls2)
+    # show_train_test_correlation(pnls1,pnls2)
+    pnls1,pnls2 = cPickle.load(open('pnls.pick'))
+    kmeans,Nc = plot_clusters(pnls1,pnls2)
+    # opt_label = plot_best_cluster(kmeans)
+    opt_label = find_best_cluster(kmeans)
+    # plt.show()
+    params = cPickle.load(open('params.pick'))
+    # print sum([1 for l in kmeans.labels_ if l==opt_label])
+    print len(params),len(pnls1)
+    # set_trace()
+    plt.plot(np.array(params)[:,0],np.array(params)[:,1],'bo')
+    plt.plot(np.array(params)[kmeans.labels_==opt_label,0],np.array(params)[kmeans.labels_==opt_label,1],'ro')
+    plt.show()
+
+
+
