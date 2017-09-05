@@ -156,7 +156,7 @@ def run_parameter_sweep(tickers,start,end,BACKEND,N):
     # plt.show()
 
     p0 = prices(tickers,start,mid_point,backend=BACKEND)
-    pnls1,sharpes1,ddwns1,new_params = parameter_sweep(tickers,p0,params,N)
+    pnls1,sharpes1,ddwns1,new_params = parameter_sweep(tickers,p0,params,N,progress=True)
 
     p1 = prices(tickers,mid_point,end,backend=BACKEND)
     pnls2,sharpes2,ddwns2,new_params = parameter_sweep(tickers,p1,params,N,progress=True)
@@ -233,6 +233,27 @@ def plot_best_cluster(kmeans):
     plt.ylabel('test pnl')
     return opt_label
 
+def plot_best_parameters(kmeans):
+    opt_label = find_best_cluster(kmeans)
+    params = cPickle.load(open('params.pick'))
+    plt.plot(np.array(params)[:,0],np.array(params)[:,1],'bo')
+    plt.plot(np.array(params)[kmeans.labels_==opt_label,0],np.array(params)[kmeans.labels_==opt_label,1],'ro')
+    plt.xlabel('parameter 1')
+    plt.ylabel('parameter 2')
+
+def get_best_parameters(params,pnls2,N):
+    idx = np.argsort(pnls2)
+    unique_params = np.unique(np.array(params)[idx][-N:],axis=0)
+    return unique_params
+
+def plot_best_params(params,tickers,start,end,BACKEND):
+    p = prices(tickers,start,end,backend=BACKEND)
+    for par in params:
+        print par
+	pnl = (calc_pnl(calc_signals(tickers,p,min(par),max(par)),p))
+	# print pnl[-1],
+	# print (calc_sharpe(calc_pnl(calc_signals(tickers,p,min(par),max(par)),p)))
+	plt.plot(p.index,(calc_pnl(calc_signals(tickers,p,min(par),max(par)),p)))
 
 if __name__=="__main__":
     # BACKEND = 'google'
@@ -249,19 +270,20 @@ if __name__=="__main__":
     # pnls1,sharpes1,ddwns1,pnls2,sharpes2,ddwns2,params = run_parameter_sweep(tickers,start,end,BACKEND,30000)
     # cPickle.dump([pnls1,pnls2],open('pnls.pick','w'))
     # cPickle.dump(params,open('params.pick','w'))
+    # cPickle.dump([sharpes1,sharpes2],open('sharpes.pick','w'))
+    # cPickle.dump([ddwns1,ddwns2],open('ddwns.pick','w'))
+    # plot_pnl_hist(pnls1,pnls2)
     # plot_pnl_hist(pnls1,pnls2)
     # show_train_test_correlation(pnls1,pnls2)
     pnls1,pnls2 = cPickle.load(open('pnls.pick'))
-    kmeans,Nc = plot_clusters(pnls1,pnls2)
-    # opt_label = plot_best_cluster(kmeans)
-    opt_label = find_best_cluster(kmeans)
-    # plt.show()
     params = cPickle.load(open('params.pick'))
-    # print sum([1 for l in kmeans.labels_ if l==opt_label])
-    print len(params),len(pnls1)
-    # set_trace()
-    plt.plot(np.array(params)[:,0],np.array(params)[:,1],'bo')
-    plt.plot(np.array(params)[kmeans.labels_==opt_label,0],np.array(params)[kmeans.labels_==opt_label,1],'ro')
+    # kmeans,Nc = plot_clusters(pnls1,pnls2)
+    # opt_label = plot_best_cluster(kmeans)
+    # plot_best_parameters(kmeans)
+    # plt.show()
+    best_params = get_best_parameters(params,pnls1,15)
+    print best_params
+    plot_best_params(best_params,tickers,start,end,BACKEND)
     plt.show()
 
 
