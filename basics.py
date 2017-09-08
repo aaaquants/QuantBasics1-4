@@ -1,14 +1,15 @@
 import pandas as pd
 import pandas_datareader.data as web
+import matplotlib.pyplot as plt
 from dateutil.parser import parse
 import cPickle
-import pylab as plt
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import calinski_harabaz_score
 import datetime
 from ipdb import set_trace
+import scipy
 
 def prices(tickers,start,end,backend='google'):
     if backend == 'quantopian':
@@ -241,8 +242,8 @@ def plot_best_parameters(kmeans):
     plt.xlabel('parameter 1')
     plt.ylabel('parameter 2')
 
-def get_best_parameters(params,pnls2,N):
-    idx = np.argsort(pnls2)
+def get_best_parameters(params,pnls,N):
+    idx = np.argsort(pnls)
     unique_params = np.unique(np.array(params)[idx][-N:],axis=0)
     return unique_params
 
@@ -251,9 +252,29 @@ def plot_best_params(params,tickers,start,end,BACKEND):
     for par in params:
         print par
 	pnl = (calc_pnl(calc_signals(tickers,p,min(par),max(par)),p))
-	# print pnl[-1],
-	# print (calc_sharpe(calc_pnl(calc_signals(tickers,p,min(par),max(par)),p)))
 	plt.plot(p.index,(calc_pnl(calc_signals(tickers,p,min(par),max(par)),p)))
+    plt.xlabel('time')
+    plt.ylabel('PnL')
+
+def plot_response_surface(pnls,params,tickers,start,end,backend='file'):
+    from mpl_toolkits.mplot3d import Axes3D
+    p = prices(tickers,start,end,backend=backend)
+    best_params = get_best_parameters(params,pnls,50)
+    x = []
+    y = []
+    z = []
+    for par in best_params:
+        x.append(par[0])
+        y.append(par[1])
+	z.append(calc_pnl(calc_signals(tickers,p,min(par),max(par)),p)[-1])
+    n_points = 50
+    X,Y = np.meshgrid(np.linspace(min(x),max(x),n_points),np.linspace(min(y),max(y),n_points))
+    Z = scipy.interpolate.griddata(np.array([x,y]).T,np.array(z),(X,Y),method='cubic')
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(x,y,z,'ro')
+    ax.plot_wireframe(X,Y,Z)
+    plt.xlabel('x');plt.ylabel('y')
 
 if __name__=="__main__":
     # BACKEND = 'google'
@@ -281,9 +302,10 @@ if __name__=="__main__":
     # opt_label = plot_best_cluster(kmeans)
     # plot_best_parameters(kmeans)
     # plt.show()
-    best_params = get_best_parameters(params,pnls1,15)
-    print best_params
-    plot_best_params(best_params,tickers,start,end,BACKEND)
+    # best_params = get_best_parameters(params,pnls1,15)
+    # plot_best_params(best_params,tickers,start,end,BACKEND)
+    plot_response_surface(pnls1,params,tickers,start,end)
+    # importlib.import_module('mpl_toolkits').__path__
     plt.show()
 
 
