@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import calinski_harabaz_score
 import datetime
-from ipdb import set_trace
+# from ipdb import set_trace
 import scipy
 
 def prices(tickers,start,end,backend='google'):
@@ -175,8 +175,8 @@ def plot_pnl_hist(pnls1,pnls2):
 
 def show_train_test_correlation(pnls1,pnls2):
     plt.plot(pnls1,pnls2,'o')
-    plt.xlabel('train pnl')
-    plt.ylabel('test pnl')
+    plt.xlabel('rank train pnl')
+    plt.ylabel('rank test pnl')
     plt.title('train-test correlation')
     plt.show()
 
@@ -256,6 +256,30 @@ def plot_best_params(params,tickers,start,end,BACKEND):
     plt.xlabel('time')
     plt.ylabel('PnL')
 
+def bootstrap(pnls,params,tickers,start,end,backend='file'):
+    p = prices(tickers,start,end,backend=backend)
+    best_params = get_best_parameters(params,pnls,50)
+    pnl = calc_pnl(calc_signals(tickers,p,min(best_params[0]),max(best_params[1])),p)
+    rets = np.diff(pnl)
+    rets = rets[~np.isnan(rets)]
+    last = []
+    for i in range(500):
+        k = np.random.choice(rets,len(rets))
+        ps = np.cumsum(k)
+        if ~np.isnan(ps[-1]):
+            last.append(ps[-1])
+	plt.subplot(211)
+        plt.plot(ps)
+        plt.xlabel('time')
+        plt.ylabel('PnL')
+    print 'actual pnl:',np.cumsum(rets)[-1],' bootstrapped mean pnl: ',np.nanmean(last)
+    plt.subplot(212)
+    plt.hist(last,30)
+    plt.xlabel('PnL')
+    plt.ylabel('N')
+    plt.show()
+
+
 def plot_response_surface(pnls,params,tickers,start,end,backend='file'):
     from mpl_toolkits.mplot3d import Axes3D
     p = prices(tickers,start,end,backend=backend)
@@ -295,17 +319,19 @@ if __name__=="__main__":
     # cPickle.dump([ddwns1,ddwns2],open('ddwns.pick','w'))
     # plot_pnl_hist(pnls1,pnls2)
     # plot_pnl_hist(pnls1,pnls2)
-    # show_train_test_correlation(pnls1,pnls2)
     pnls1,pnls2 = cPickle.load(open('pnls.pick'))
     params = cPickle.load(open('params.pick'))
+    show_train_test_correlation(scipy.stats.rankdata(pnls1),scipy.stats.rankdata(pnls2))
+    # show_train_test_correlation(pnls1,pnls2)
     # kmeans,Nc = plot_clusters(pnls1,pnls2)
     # opt_label = plot_best_cluster(kmeans)
     # plot_best_parameters(kmeans)
     # plt.show()
     # best_params = get_best_parameters(params,pnls1,15)
     # plot_best_params(best_params,tickers,start,end,BACKEND)
-    plot_response_surface(pnls1,params,tickers,start,end)
+    # plot_response_surface(pnls1,params,tickers,start,end)
     # importlib.import_module('mpl_toolkits').__path__
+    # bootstrap(pnls2,params,tickers,start,end,backend='file')
     plt.show()
 
 
