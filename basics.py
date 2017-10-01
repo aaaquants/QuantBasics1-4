@@ -10,6 +10,9 @@ from sklearn.metrics import calinski_harabaz_score
 import datetime
 # from ipdb import set_trace
 import scipy
+from sklearn.svm import SVR
+from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.tree import DecisionTreeRegressor
 
 def prices(tickers,start,end,backend='google'):
     if backend == 'quantopian':
@@ -300,6 +303,22 @@ def plot_response_surface(pnls,params,tickers,start,end,backend='file'):
     ax.plot_wireframe(X,Y,Z)
     plt.xlabel('x');plt.ylabel('y')
 
+def predict_pnl(params, pnls1):
+    # model = SVR()
+    # model = LinearRegression()
+    model = DecisionTreeRegressor()
+    M = 25000 # M-len(params) is the number of parameter sets used for training
+    model.fit(np.array(params)[:-M,:],pnls1[:-M])
+    pred_pnls = model.predict(np.array(params)[:,:])
+    # plt.plot(pnls1[:],pred_pnls,'o')
+    # m = plot_linreg(pnls1[:],pred_pnls)
+    # plt.title('slope: %s'%m[0])
+    # plt.xlabel('real PnL')
+    # plt.ylabel('predicted PnL')
+    # plt.show()
+    return pred_pnls
+
+
 if __name__=="__main__":
     # BACKEND = 'google'
     BACKEND = 'file'
@@ -321,7 +340,7 @@ if __name__=="__main__":
     # plot_pnl_hist(pnls1,pnls2)
     pnls1,pnls2 = cPickle.load(open('pnls.pick'))
     params = cPickle.load(open('params.pick'))
-    show_train_test_correlation(scipy.stats.rankdata(pnls1),scipy.stats.rankdata(pnls2))
+    # show_train_test_correlation(scipy.stats.rankdata(pnls1),scipy.stats.rankdata(pnls2))
     # show_train_test_correlation(pnls1,pnls2)
     # kmeans,Nc = plot_clusters(pnls1,pnls2)
     # opt_label = plot_best_cluster(kmeans)
@@ -332,6 +351,11 @@ if __name__=="__main__":
     # plot_response_surface(pnls1,params,tickers,start,end)
     # importlib.import_module('mpl_toolkits').__path__
     # bootstrap(pnls2,params,tickers,start,end,backend='file')
+    pred1 = predict_pnl(params,pnls1)
+    pred2 = predict_pnl(params,pnls2)
+    plt.plot(pred1,pred2,'o')
+    plt.xlabel('train PnL')
+    plt.ylabel('test PnL')
     plt.show()
 
 
